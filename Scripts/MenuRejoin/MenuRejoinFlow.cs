@@ -1,0 +1,533 @@
+using System;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using AutoReconnect.Scripts.Reload;
+using Godot;
+using MegaCrit.Sts2.Core.Entities.Multiplayer;
+using MegaCrit.Sts2.Core.Multiplayer;
+using MegaCrit.Sts2.Core.Multiplayer.Connection;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
+using MegaCrit.Sts2.Core.Multiplayer.Messages.Lobby;
+using MegaCrit.Sts2.Core.Nodes;
+using MegaCrit.Sts2.Core.Runs;
+
+namespace AutoReconnect.Scripts.MenuRejoin;
+
+/// <summary>
+/// v0.7.0 —— 客机「从主菜单重连进对局」核心流程。
+///
+/// ## 为什么需要这个（根因，已由 IL 反编译 + 双端日志实锤）
+///
+/// 原版 <c>NJoinFriendScreen.JoinGameAsync</c> 在拿到 <c>JoinResult</c> 后：
+/// <code>
+/// else if (joinResult.sessionState == RunSessionState.Running)
+/// {
+///     NErrorPopup.Create(new NetErrorInfo(NetError.RunInProgress, selfInitiated: false)); // 弹错误
+///     _currentJoinFlow.NetService.Disconnect(NetError.RunInProgress);                     // 客机自己断开
+/// }
+/// </code>
+/// 也就是说 —— **原版压根没实现「从主菜单重连进行中的对局」**。
+///
+/// 双端日志证实了这条死路：
+///   - 客机 godot.log：`Sending ClientRequestRejoinMessage` → `Received ClientRejoinResponseMessage`
+///     （握手成功！）→ 紧接着 `Disconnecting from host (now: False reason: 1008)`（1008 = RunInProgress，
+///     **客机自己断的**）→ 玩家卡在「加入好友列表」界面。
+///   - 主机 godot (7).log：`Received ClientRejoinRequestMessage` 正常处理，`拒绝玩家…运行中重连` 出现 **0 次**
+///     （主机全程放行），主机把玩家标记为已连接 → 这就是「主机画面显示客机已进入」的原因。
+///
+/// ## 修复思路
+///
+/// 主机回复的 <see cref="ClientRejoinResponseMessage"/> 里带着 **完整的 <c>SerializableRun</c>**，
+/// 足以在客机端重建整个对局。我们复刻原版「多人载入存档」的官方流程
+/// （<c>NMultiplayerLoadGameScreen.StartRun</c>）：
+/// <code>
+/// RunState.FromSerializable(run) → RunManager.SetUpSavedMultiplayer(state, lobby) → NGame.LoadRun(...)
+/// </code>
+///
+/// ## 战斗中为什么仍然不能重连
+///
+/// <c>ClientRejoinResponseMessage.combatState</c>（<see cref="NetFullCombatState"/>）**只有 <c>FromRun</c>，
+/// 没有任何 Apply/Restore 方法** —— 它是 checksum 比对用的只读快照，游戏本身不具备「从快照恢复战斗」的能力。
+/// 因此主机若正处于战斗中，重建出来的客机 run 会缺失战斗现场，必然与主机状态分歧。
+/// 这种情况下我们不重建，改为提示「等本场战斗结束后再重连」（带重试按钮）。
+/// </summary>
+public static class MenuRejoinFlow
+{
+    /// <summary>菜单重连是否正在进行（防重入，也供其它补丁判断当前语境）。</summary>
+    public static bool IsRejoining { get; private set; }
+
+    /// <summary>
+    /// 最近一次加入尝试是否是「重连进行中的对局」。
+    /// 供 <c>RejoinBlockedPopupPatch</c> 判断是否要把原版 RunInProgress 文案换成
+    /// 「等本场战斗结束后再重连」——菜单场景下 RunManager.NetService 为 null，
+    /// 原有的 isClient 判断会失效。
+    /// </summary>
+    public static bool LastAttemptWasRejoin { get; set; }
+
+    /// <summary>
+    /// 菜单重连（游戏被 Steam 邀请重拉起）场景下的主机 Steam ID。
+    /// 在 <see cref="JoinFlowRejoinPatch"/> 识别出这是一次菜单 rejoin 时写入，
+    /// 供「重试」按钮在战斗未结束 / 重建失败时重新发起一次菜单重连握手。
+    /// 0 表示当前不处于菜单重连语境——<c>ReconnectBlockedPopup</c> 据此区分
+    /// 「菜单重连重试」与「对局内重连重试」（后者走 ReconnectRunner，要求 RunManager 有内存中的 run）。
+    /// </summary>
+    public static ulong PendingRejoinHostSteamId { get; set; }
+
+    /// <summary>
+    /// 判断主机当前是否处于战斗中。
+    ///
+    /// 依据 <c>NetFullCombatState.FromRun</c> 的实现：
+    /// <code>
+    /// var creatures = runState.Players[0].Creature.CombatState?.Creatures ?? Array.Empty&lt;Creature&gt;();
+    /// </code>
+    /// 非战斗时 <c>CombatState</c> 为 null → <c>Creatures</c> 为空列表。
+    /// 注意 <c>GetRejoinMessage()</c> 是 **无条件** 生成 combatState 的，
+    /// 所以不能用 <c>HasValue</c> 判断，必须看 Creatures 是否为空。
+    /// </summary>
+    public static bool HostIsInCombat(NetFullCombatState? combatState)
+    {
+        if (combatState == null) return false;
+        try
+        {
+            return combatState.Creatures is { Count: > 0 };
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 读取 combatState.Creatures 失败（保守视为战斗中）：{ex.Message}");
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// v0.9.0 —— 「对局内重连但主机状态已变」时的整局重建。
+    ///
+    /// 典型触发：主机执行了检查点回退（<c>CheckpointRollback</c>），存档被换成更早的快照。
+    /// 此时客机内存里的 run 是**回退之前**的，若沿用 v0.7.0 的「只换 NetService」快路径，
+    /// 客机会带着过期状态继续跑 → 下一次校验和比对必然 StateDivergence。
+    ///
+    /// 做法：先把本地残留的 run 清干净（清理时抑制 Disconnect，保住刚握手成功的新连接），
+    /// 再复用 <see cref="EnterRunFromRejoin"/> 按主机回传的存档整份重建。
+    /// </summary>
+    public static async Task RebuildRunInPlace(INetClientGameService netService, ClientRejoinResponseMessage rejoin)
+    {
+        var rm = RunManager.Instance;
+        if (rm != null && rm.DebugOnlyGetState() != null)
+        {
+            // rm.NetService 此刻还是那条已经死掉的旧连接；CleanUp 会对它调 Disconnect。
+            // 用断连抑制包装统一挡掉，杜绝任何「清理旧局顺手把新连接也拆了」的可能。
+            Diag.Log("[MenuRejoin] 主机状态已变，先清理本地过期 run 再整局重建。");
+            AutoReconnect.Scripts.Net.NetServiceSwapper.CleanUpKeepingConnection(rm, graceful: false);
+
+            // 等一帧，让 CleanUp 触发的节点释放（NOverlayStack/NModalContainer 等）落地。
+            if (Engine.GetMainLoop() is SceneTree tree)
+                await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
+
+        await EnterRunFromRejoin(netService, rejoin);
+    }
+
+    /// <summary>
+    /// 读取本地 run 的重载计数（<c>RunManager._numReloads</c>，BaseGame RunManager.cs:74）。
+    ///
+    /// 这是判断「主机的 run 还是不是我手里这一份」的最省事的原生标记：
+    /// <c>SetUpSavedSingleplayer</c> / <c>SetUpSavedMultiplayer</c> 都会先
+    /// <c>SaveManager.IncrementNumReloads(save, …)</c> 再把值灌进来（RunManager.cs:391-392），
+    /// 所以主机每回退一次，它的 NumReloads 就 +1，而客机手里的还是旧值。
+    /// 普通网络抖动重连则两边一致 —— 快路径（只换连接）得以保留。
+    ///
+    /// 返回 -1 表示读不到（反射失败 / 没有 run），调用方应保守处理。
+    /// </summary>
+    public static int GetLocalNumReloads()
+    {
+        try
+        {
+            var rm = RunManager.Instance;
+            if (rm == null || rm.DebugOnlyGetState() == null) return -1;
+            var f = typeof(RunManager).GetField("_numReloads",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (f == null)
+            {
+                Diag.Log("[MenuRejoin] 未找到 RunManager._numReloads 字段（游戏版本变更？）。");
+                return -1;
+            }
+            return f.GetValue(rm) is int v ? v : -1;
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 读取本地 NumReloads 失败：{ex.Message}");
+            return -1;
+        }
+    }
+
+    /// <summary>
+    /// v0.9.9 —— 整局重建后把本地 <c>RunManager._numReloads</c> 拨回主机的值。
+    ///
+    /// ## 修的是什么
+    ///
+    /// <c>SetUpSavedMultiplayer</c> 内部第一件事就是
+    /// <c>SaveManager.IncrementNumReloads(save, …)</c>（RunManager.cs:391），
+    /// 它会 <c>save.NumReloads++</c> 之后再灌进 <c>_numReloads</c>。
+    /// 于是每做一次整局重建，客机的 <c>_numReloads</c> 就比主机多 1 —— **而且再也回不来**。
+    ///
+    /// 后果很严重：<see cref="ReconnectRunner"/> 第 6 步用
+    /// <c>主机 NumReloads != 本地 _numReloads</c> 判断「主机是否回退过」。
+    /// 一旦漂移，此后**每一次**重连（哪怕只是网络抖一下、主机根本没回退）都会被判成
+    /// 「主机状态已变」而强制整局重建；而每次重建都会让客机把当前节点重走一遍
+    /// （见 <see cref="RejoinSnapshotPatch"/> 的副作用表）。
+    /// 2026-08-10 双机日志里客机一晚上收到 3 次 <c>ClientRejoinResponseMessage</c>、
+    /// 多走了 2 个节点（SLIMES@9、THIEVING_HOPPER@19），就是这么滚出来的。
+    ///
+    /// ## 为什么直接对齐是对的
+    ///
+    /// 这个字段在客机侧的唯一用途就是「和主机比大小」。重建刚完成的这一刻，
+    /// 客机手里的 run 就是主机那一份，两边理应相等。往后主机每回退一次 +1，
+    /// 客机仍能正确识别出「主机状态已变」。
+    /// </summary>
+    private static void AlignNumReloadsWithHost(int hostNumReloads)
+    {
+        try
+        {
+            if (hostNumReloads < 0) return;
+
+            var rm = RunManager.Instance;
+            if (rm == null) return;
+
+            var f = typeof(RunManager).GetField("_numReloads",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f == null)
+            {
+                Diag.Log("[MenuRejoin] 未找到 RunManager._numReloads，无法对齐（游戏版本变更？）。");
+                return;
+            }
+
+            int local = f.GetValue(rm) is int v ? v : -1;
+            if (local == hostNumReloads) return;
+
+            f.SetValue(rm, hostNumReloads);
+            Diag.Log($"[MenuRejoin] NumReloads 已对齐主机：{local} → {hostNumReloads}" +
+                     "（否则此后每次重连都会被误判成「主机状态已变」而重复整局重建）。");
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 对齐 NumReloads 失败（不阻断重连）：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 用主机回传的存档重建对局并进入。复刻 <c>NMultiplayerLoadGameScreen.StartRun()</c>。
+    /// 调用前必须确认：本端没有正在进行的 run（<c>DebugOnlyGetState() == null</c>）。
+    /// </summary>
+    public static async Task EnterRunFromRejoin(INetClientGameService netService, ClientRejoinResponseMessage rejoin)
+    {
+        if (IsRejoining)
+            throw new InvalidOperationException("菜单重连已在进行中。");
+
+        var run = rejoin.serializableRun;
+        if (run == null)
+            throw new InvalidOperationException("主机回传的 serializableRun 为空。");
+
+        // v0.9.9 —— 必须在 SetUpSavedMultiplayer 之前读走：
+        // SetUpSavedMultiplayer → SaveManager.IncrementNumReloads(save) 会**原地** save.NumReloads++
+        // （SaveManager.cs:296-298），之后这个字段就不再是主机的真值了。
+        int hostNumReloads = run.NumReloads;
+
+        var game = NGame.Instance;
+        if (game == null)
+            throw new InvalidOperationException("NGame.Instance 为空，无法加载对局。");
+
+        IsRejoining = true;
+        NetUpdatePump? pump = null;
+        LoadRunLobby? lobby = null;
+
+        try
+        {
+            // JoinFlow.Begin 的 finally 已经取消了它自己的 NetService.Update 循环，
+            // 而 NRun 场景要等 LoadRun 走完才会接手驱动。中间这段（淡出 + 反序列化 +
+            // 资源预加载）可能长达数秒，期间若没人调 Update()，Steam 连接会因收不到
+            // 心跳而超时断开。这里挂一个临时泵机保活，LoadRun 完成后立即撤掉。
+            netService.SetBufferMessages(bufferMessages: true);
+            pump = NetUpdatePump.Attach(netService);
+
+            // LoadRunLobby 是 SetUpSavedMultiplayer 的入参载体，提供 NetService /
+            // InputSynchronizer / Run / Players。用 SerializableRun 重载构造时 Players
+            // 是空的，必须自己按存档里的玩家补齐，否则 InitializeRunLobby 会拿到空名单。
+            lobby = new LoadRunLobby(netService, PassiveRejoinLobbyListener.CreateListener(), run);
+            foreach (var p in run.Players)
+            {
+                lobby.Players.Add(new LoadRunLobbyPlayer
+                {
+                    id = p.NetId,
+                    versionInfo = PeerVersionInfo.LocalDefault(),
+                    isReady = true
+                });
+            }
+
+            Diag.Log($"[MenuRejoin] 开始重建对局：玩家 {run.Players.Count} 人，第 {run.CurrentActIndex + 1} 幕。");
+
+            await game.Transition.FadeOut();
+
+            RejoinSceneReloadGuard.PrepareCurrentHandForSceneSwap();
+            using (RejoinTransitionGuard.SuppressTransitions())
+            using (RejoinSceneReloadGuard.SuppressLateHandLayoutRefresh())
+            using (RejoinSceneReloadGuard.PreserveStableTopBarLocation())
+            {
+                var runState = RunState.FromSerializable(run);
+                await RunManager.Instance.SetUpSavedMultiplayer(runState, lobby);
+
+                // v0.9.9 —— 把本地 _numReloads 拨回主机的值，消除「重建一次就永久 +1」的漂移。
+                AlignNumReloadsWithHost(hostNumReloads);
+
+            // v0.7.1 修复：重连客机加载当前房间时，其他玩家早已完成 CombatStateSynchronizer 握手。
+            // 若不禁用，客机会永远等待不会重发的 SyncPlayerDataMessage / SyncRngMessage，导致黑屏。
+            // 临时禁用本次房间入口的同步，LoadRun 完成后再恢复；SerializableRun 已带回主机当前状态。
+            CombatStateSynchronizer? combatSync = null;
+            try
+            {
+                combatSync = RunManager.Instance.CombatStateSynchronizer;
+                if (combatSync != null)
+                {
+                    combatSync.IsDisabled = true;
+                    Diag.Log("[MenuRejoin] 已临时禁用 CombatStateSynchronizer，避免重连客机等待过期握手。");
+                }
+            }
+            catch (Exception ex)
+            {
+                Diag.Log($"[MenuRejoin] 禁用 CombatStateSynchronizer 失败：{ex.Message}");
+            }
+
+            try
+            {
+                await game.LoadRun(runState, run.PreFinishedRoom);
+            }
+            finally
+            {
+                try
+                {
+                    if (combatSync != null)
+                    {
+                        combatSync.IsDisabled = false;
+                        Diag.Log("[MenuRejoin] 已恢复 CombatStateSynchronizer。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Diag.Log($"[MenuRejoin] 恢复 CombatStateSynchronizer 失败：{ex.Message}");
+                }
+            }
+            }
+
+            // disconnectSession: false —— 只注销 lobby 的消息处理器，
+            // 连接本身要留给已经接管的 RunManager 继续用。
+            lobby.CleanUp(disconnectSession: false);
+            lobby = null;
+
+            // v0.7.1 —— 必须把缓冲关掉。上面为了熬过「JoinFlow 收工 → NRun 接手」的真空期
+            // 开了 SetBufferMessages(true)，v0.7.0 全流程**没有任何一处把它关回去**：
+            // 于是重连进局后主机发来的所有消息都被一直堆在缓冲区里、永不派发，
+            // 客机表现为「进去了但完全不同步 / 卡住不动」。
+            // 这里在 RunManager 已注册好处理器、lobby 处理器已注销之后关闭缓冲，
+            // 让积压的消息一次性派发给正确的接收方。
+            try
+            {
+                netService.SetBufferMessages(bufferMessages: false);
+                Diag.Log("[MenuRejoin] 已关闭消息缓冲，积压消息交由 RunManager 处理。");
+            }
+            catch (Exception ex)
+            {
+                Diag.Log($"[MenuRejoin] 关闭消息缓冲失败（可能导致进局后不同步）：{ex.Message}");
+            }
+
+            pump?.Detach();
+            pump = null;
+
+            await game.Transition.FadeIn();
+
+            Diag.Log("[MenuRejoin] 重连成功，已进入对局。");
+            PendingRejoinHostSteamId = 0;
+            HostInfoTracker.CaptureFromGame();
+        }
+        catch (Exception)
+        {
+            // 半途失败会留下一个残缺的 RunManager.State，必须清干净，
+            // 否则玩家回到主菜单后再开新局会撞上 "State is already set."。
+            // 缓冲开关同样要还原，否则这条连接即便被后续流程复用也收不到任何消息。
+            try { netService.SetBufferMessages(bufferMessages: false); } catch { }
+            try { lobby?.CleanUp(disconnectSession: true, NetError.InternalError); } catch { }
+            try { pump?.Detach(); } catch { }
+            try
+            {
+                if (RunManager.Instance.DebugOnlyGetState() != null)
+                {
+                    RunManager.Instance.CleanUp(graceful: false);
+                    Diag.Log("[MenuRejoin] 已清理半途失败的 RunManager 状态。");
+                }
+            }
+            catch (Exception cleanupEx)
+            {
+                Diag.Log($"[MenuRejoin] 清理残留状态时出错：{cleanupEx.Message}");
+            }
+            throw;
+        }
+        finally
+        {
+            IsRejoining = false;
+        }
+    }
+
+    /// <summary>
+    /// 菜单重连的「重试」入口：用上一次握手拿到的主机 Steam ID 重新发起一次完整握手，
+    /// 并复用 <see cref="JoinFlowRejoinPatch.InterceptAsync"/> 的判定逻辑。
+    ///
+    /// 与「对局内重连」的 ReconnectRunner 不同——菜单重连时 RunManager 里没有内存中的 run，
+    /// 不能靠 AssignNetServiceToRunManager 直接换连接，必须走完整握手 + 重建对局。
+    /// 典型触发：主机当时处于战斗中（本次被拦），等战斗结束后点「重试」即可真正进局。
+    /// 若战斗仍未结束，<see cref="JoinFlowRejoinPatch.InterceptAsync"/> 会再次拦下并弹出提示，
+    /// 形成「点重试 → 仍被拦 → 再等 → 再重试」的良性循环，而非卡死。
+    /// </summary>
+    public static async Task RetryRejoin()
+    {
+        if (IsRejoining)
+        {
+            Diag.Log("[MenuRejoin] 菜单重连正在进行中，忽略本次重试。");
+            return;
+        }
+
+        // v0.7.1 —— 改走公共工厂 ReconnectService.CreateInitializer。
+        // v0.7.0 这里写死了 SteamClientConnectionInitializer.FromPlayer(hostId)，
+        // 把 v0.6.1 已经修好的「优先 FromLobby」又丢了回去（回归 bug）：
+        // 长断线后 GetFriendGamePlayed 拿不到主机的有效大厅信息 → FromPlayer 直接 InvalidJoin，
+        // 玩家看到的就是「点重试没反应 / 连接超时」。
+        var hostId = PendingRejoinHostSteamId;
+        var initializer = ReconnectService.CreateInitializer(hostId, out var connLabel, out var failReason);
+        if (initializer == null)
+        {
+            Diag.Log($"[MenuRejoin] 无法发起菜单重连重试：{failReason}");
+            ReconnectDiagnostics.ReportClientFailure(
+                ReconnectStage.ResolvingTarget,
+                failReason,
+                attempt: 1,
+                maxAttempts: 1,
+                withRetryButton: false);
+            return;
+        }
+
+        try
+        {
+            Diag.Log($"[MenuRejoin] 发起菜单重连重试，连接方式 = {connLabel}");
+            var flow = new JoinFlow(new NetClientGameService());
+            var inner = flow.Begin(initializer, Engine.GetMainLoop() as SceneTree);
+            // InterceptAsync 会：识别 rejoin →（非战斗）重建对局 /（战斗中）再次提示，
+            // 并维持 LastAttemptWasRejoin / PendingRejoinHostSteamId 语义。
+            await JoinFlowRejoinPatch.InterceptAsync(flow, inner).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 菜单重连重试异常：{ex}");
+            ReconnectDiagnostics.ReportClientFailure(
+                ReconnectStage.Connecting,
+                $"{ex.GetType().Name}: {ex.Message}",
+                attempt: 1,
+                maxAttempts: 1,
+                hintOverride: $"连接方式：{connLabel}。若反复失败，请让房主重新从 Steam 邀请你。");
+        }
+    }
+}
+
+/// <summary>
+/// <see cref="ILoadRunLobbyListener"/> 的动态代理实现（DispatchProxy）。
+///
+/// 重连场景下不存在「大厅界面」，也没有准备/开始流程需要回调：
+/// run 是我们自己直接拉起来的，不走 <c>BeginRun</c> 那条路。
+/// 这些回调只在 lobby 存活的极短窗口内可能被触发，全部忽略即可。
+///
+/// 使用 DispatchProxy 而非直接实现接口：0.107.1–0.109.1 的 PlayerConnected
+/// 参数是 ulong，0.110 改为 LoadRunLobbyPlayer。直接实现无法同时兼容两种签名，
+/// DispatchProxy 按方法名分发，消除接口签名变更导致的编译/运行硬阻断。
+/// 参考 QuickSL 的 PassiveLoadRunLobbyListener。
+/// </summary>
+public class PassiveRejoinLobbyListener : DispatchProxy
+{
+    /// <summary>创建一个实现 <see cref="ILoadRunLobbyListener"/> 的动态代理实例。</summary>
+    public static ILoadRunLobbyListener CreateListener()
+    {
+        return (ILoadRunLobbyListener)DispatchProxy.Create(
+            typeof(ILoadRunLobbyListener),
+            typeof(PassiveRejoinLobbyListener));
+    }
+
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+    {
+        if (targetMethod == null)
+            throw new ArgumentNullException(nameof(targetMethod));
+        args ??= Array.Empty<object?>();
+
+        switch (targetMethod.Name)
+        {
+            case "PlayerConnected":
+            case "RemotePlayerDisconnected":
+            case "BeginRun":
+            case "PlayerReadyChanged":
+            case "LocalPlayerDisconnected":
+                return null;
+
+            case "ShouldAllowRunToBegin":
+                return Task.FromResult(true);
+
+            default:
+                Diag.Log($"[MenuRejoin] PassiveRejoinLobbyListener: 未适配的回调 {targetMethod.Name}（已忽略）。");
+                return null;
+        }
+    }
+}
+
+/// <summary>
+/// 临时网络泵机：在「JoinFlow 已收工、NRun 尚未接手」的真空期里持续调用
+/// <c>NetService.Update()</c>，避免连接因长时间无人轮询而超时。
+/// </summary>
+public sealed partial class NetUpdatePump : Node
+{
+    private INetGameService? _service;
+
+    public static NetUpdatePump? Attach(INetGameService service)
+    {
+        try
+        {
+            if (Engine.GetMainLoop() is not SceneTree tree) return null;
+            var pump = new NetUpdatePump
+            {
+                _service = service,
+                Name = "AutoReconnectMin_NetPump"
+            };
+            tree.Root.AddChild(pump);
+            return pump;
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 无法挂载网络泵机（继续但连接可能超时）：{ex.Message}");
+            return null;
+        }
+    }
+
+    public void Detach()
+    {
+        _service = null;
+        try { QueueFree(); } catch { }
+    }
+
+    public override void _Process(double delta)
+    {
+        var svc = _service;
+        if (svc == null) return;
+        try
+        {
+            if (svc.IsConnected) svc.Update();
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 泵机 Update 异常：{ex.Message}");
+            _service = null;
+        }
+    }
+}

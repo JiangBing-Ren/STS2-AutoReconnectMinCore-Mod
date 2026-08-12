@@ -1,0 +1,12 @@
+{
+  "id": "AutoReconnectMinCore",
+  "name": "Auto Reconnect Min Core",
+  "author": "姜秉人",
+  "description": "【核心】断线自动重连——客机掉线后自动重连回同一 Steam 大厅，无需重新邀请。纯重连功能，不含检查点回退/离线托管/战斗同步。可独立安装，也可作为 AutoReconnectMin 的前置依赖。通过 RitsuLib 提供设置界面（autoReconnectEnabled 开关）。",
+  "version": "0.9.24-core",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [{"id": "STS2-RitsuLib"}],
+  "affects_gameplay": false,
+  "min_game_version": "0.110.0"
+}
