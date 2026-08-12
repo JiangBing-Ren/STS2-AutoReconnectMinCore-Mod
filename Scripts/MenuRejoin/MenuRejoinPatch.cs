@@ -74,6 +74,54 @@ internal static class JoinFlowRejoinPatch
             var rejoin = result.rejoinResponse.Value;
             var myId = flow.NetService.NetId;
 
+            // [v0.9.34] 客机主动退出后常驻内存的活 run：主机从 Steam 再次邀请（同一 lobby）时零重建复用。
+            // 比对 lobby id 判定「重邀的是同一局」——避免误把旧 run 复用进一个完全不同的新对局。
+            if (ClientRunPreserver.PreservedRun != null)
+            {
+                if (ClientRunPreserver.MatchesCurrentLobby(HostInfoTracker.LobbyId))
+                {
+                    // 战斗中无法从快照恢复战斗现场 → 降级常规整局重建（用主机回传存档），并清除保留。
+                    if (MenuRejoinFlow.HostIsInCombat(rejoin.combatState))
+                    {
+                        Diag.Log("[MenuRejoin] 保留 run 但主机在战斗中，降级常规整局重建并清除保留。");
+                        ClientRunPreserver.Clear();
+                        // 落回下方常规重建路径（不 return）。
+                    }
+                    else
+                    {
+                        Diag.Log("[MenuRejoin] 命中保留活 run（同一 lobby），走零重建重锚。");
+                        try
+                        {
+                            await MenuRejoinFlow.EnterRunFromLiveState(flow.NetService, rejoin, ClientRunPreserver.PreservedRun)
+                                .ConfigureAwait(true);
+                            ClientRunPreserver.Clear(); // 已消费，释放引用（State 已由 RunManager 持有）
+                            result.sessionState = null;
+                            MenuRejoinFlow.LastAttemptWasRejoin = false;
+                            MenuRejoinFlow.PendingRejoinHostSteamId = 0;
+                            ReconnectDiagnostics.ReportClientSuccess(
+                                "主菜单重连（复用退出前活 run，零重建保真）",
+                                attempt: 1,
+                                maxAttempts: 1,
+                                $"已恢复到第 {(rejoin.serializableRun?.CurrentActIndex ?? 0) + 1} 幕，" +
+                                $"共 {rejoin.serializableRun?.Players.Count ?? 0} 名玩家。");
+                            return result;
+                        }
+                        catch (Exception ex)
+                        {
+                            Diag.Log($"[MenuRejoin] 零重建重锚失败，降级常规重建：{ex}");
+                            ClientRunPreserver.Clear();
+                            // 落回下方常规重建路径。
+                        }
+                    }
+                }
+                else
+                {
+                    // 不同 lobby（不同对局）→ 保留的是旧 run，已失效，清除后走常规重建。
+                    Diag.Log("[MenuRejoin] 保留 run 的 lobby 与当前重邀不一致，视为旧 run 已失效，清除并常规重建。");
+                    ClientRunPreserver.Clear();
+                }
+            }
+
             // 我本来就不是这局的玩家 → 这是「围观别人已开始的对局」，
             // 原版拒绝是对的，放行让它弹 RunInProgress。
             var players = rejoin.serializableRun?.Players;

@@ -1,6 +1,7 @@
 using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
+using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace AutoReconnect.Scripts;
@@ -13,9 +14,13 @@ namespace AutoReconnect.Scripts;
 internal static class SetUpSavedMultiplayerPatch
 {
     [HarmonyPostfix]
-    private static void Postfix()
+    private static void Postfix(RunState state)
     {
         Diag.Log("SetUpSavedMultiplayer patch fired!");
+        // [v0.9.34] 若正在 SetUp 的不是保留的那一局（新对局 / 不同 run），清除常驻保留，
+        // 防止后续菜单重连误把旧 run 复用进一个完全不同的新对局。
+        if (ClientRunPreserver.PreservedRun != null && !ReferenceEquals(ClientRunPreserver.PreservedRun, state))
+            ClientRunPreserver.Clear();
         HostInfoTracker.CaptureFromGame();
     }
 }
@@ -158,33 +163,61 @@ internal static class LocalPlayerDisconnectedPatch
                 return true;
             }
 
-            // [v0.9.32-core] 正常结束 / 退出对局，绝不触发重连：
-            //   ① 主机是联机权威，没有可重连的“服务器”；主机的 LocalPlayerDisconnected 只代表本局结束，
-            //      重连既无意义又会错误弹出“重连尝试”框（主机无主机 Steam ID / 大厅可连）。
-            //   ② QuitGameOver / Quit / HostAbandoned 都表示对局或会话“正常结束”（失败/胜利/主动退出/主机放弃），
-            //      不存在“在途可重连对局”，重连必 InvalidJoin。这与 DisconnectWasSelfInitiated 同理，
-            //      但由 reason 显式判定更可靠——QuitGameOver 不会置 SelfInitiated 标志，之前因此漏判而弹重连。
+            // [v0.9.32-core] 主机是联机权威，没有可重连的“服务器”；主机的 LocalPlayerDisconnected
+            //   只代表本局结束，重连既无意义又会错误弹出“重连尝试”框（主机无主机 Steam ID / 大厅可连）。
             if (IsLocalPlayerHost())
             {
                 Diag.Log("Local 是主机：权威端无需重连，放行原版对局结束流程。");
                 HostInfoTracker.Reset();
                 return true;
             }
-            if (reason == NetError.QuitGameOver || reason == NetError.Quit || reason == NetError.HostAbandoned)
+
+            // [v0.9.33-core] 方向 A：游戏“正常结束”类 reason 仍放行原版（run 已无意义，不保留）：
+            //   · QuitGameOver = 对局失败/胜利结束；
+            //   · HostAbandoned = 主机放弃/离开，没有可连的主机。
+            //   主动退出对局（reason=Quit / 用户自行退出）【不再】在此抑制——见下方方向 A 处理。
+            if (reason == NetError.QuitGameOver || reason == NetError.HostAbandoned)
             {
-                Diag.Log($"正常结束/退出（{reason}），放行原版流程，不弹重连。");
+                Diag.Log($"对局/会话正常结束（{reason}），放行原版流程，不保留 run。");
                 HostInfoTracker.Reset();
                 return true;
             }
 
-            // 用户主动退出（菜单/设置）→ 放行原版流程。
-            // 但 StateDivergence 绝不可能是本地主动退出，标志若为 true 只可能是残留，直接无视。
-            if (HostInfoTracker.DisconnectWasSelfInitiated && !isDivergence)
+            // [v0.9.34-core] 客机【主动退出】（reason=Quit / 用户自行退出）：
+            //   直接退回主菜单，不停在「重连中」浮层自动重拨；run 常驻内存等待主机 Steam 邀请零重建复用。
+            //   （run 仅在进入新多人对局 / 关闭游戏时才销毁——用户 2026-08-12 硬性语义。）
+            bool selfInitiated = reason == NetError.Quit || HostInfoTracker.DisconnectWasSelfInitiated;
+            if (selfInitiated)
             {
-                Diag.Log("User-initiated exit, allowing normal flow");
-                HostInfoTracker.Reset();
-                return true;
+                HostInfoTracker.DisconnectWasSelfInitiated = false;
+                ClientRunPreserver.Capture();          // 捕获活 run（须在 CleanUp 置 State=null 之前）
+                HostInfoTracker.IsReconnecting = false;
+                // 注：WasInMultiplayer / HostSteamId / LobbyId 保留不动——供重邀时识别同一局与建立连接。
+                // WasInMultiplayer 由 CaptureFromGame 在下次 SetUpSavedMultiplayer 时再管理。
+                Diag.Log("[v0.9.34] 客机主动退出：run 已捕获常驻内存，退回主菜单等待主机 Steam 邀请零重建复用。");
+                try
+                {
+                    var game = NGame.Instance;
+                    if (game == null)
+                    {
+                        Diag.Log("[v0.9.34] NGame.Instance 为空，回退原版流程（将弹错误框但至少回主菜单）。");
+                        return true;
+                    }
+                    // 干净回主菜单（无错误弹窗）。ReturnToMainMenu 内部会 CleanUp —— 它只置 State=null、
+                    // 不 Dispose RunState 数据对象，故 ClientRunPreserver 持有的引用使活 run 不被 GC 回收。
+                    _ = game.ReturnToMainMenu();
+                }
+                catch (Exception ex)
+                {
+                    Diag.Log($"[v0.9.34] ReturnToMainMenu 触发异常，回退原版流程：{ex.Message}");
+                    return true;
+                }
+                return false; // 阻断原版 LocalPlayerDisconnected（避免错误弹窗 + 避免与 CleanUp 语义冲突）
             }
+
+            // [v0.9.34-core] 瞬断（Timeout / StateDivergence 且非用户主动退出）：保留内存活 run +
+            //   复用已断开 NetService 旧实例（Card3：只重拨传输层、零重建）自动重拨接回。沿用既有逻辑。
+            HostInfoTracker.DisconnectWasSelfInitiated = false; // 进入重连，旧的退出意图作废
 
             if (isDivergence)
             {

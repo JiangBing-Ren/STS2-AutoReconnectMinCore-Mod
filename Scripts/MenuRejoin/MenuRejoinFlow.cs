@@ -377,6 +377,163 @@ public static class MenuRejoinFlow
     }
 
     /// <summary>
+    /// v0.9.34 — 用「主动退出时捕获的活 RunState」**零重建重锚**进对局。
+    ///
+    /// 与 <see cref="EnterRunFromRejoin"/> 的唯一区别：传给 <c>SetUpSavedMultiplayer</c> 的 State 是
+    /// **主动退出前捕获的活 RunState 对象**（含地图光标 / RNG / 事件已结算效果），而非
+    /// <c>RunState.FromSerializable(rejoin.serializableRun)</c>。而 lobby 仍用主机回传的
+    /// <c>serializableRun</c> 承载（提供 NumReloads / MapDrawings 等元数据）——二者本就是同一局，
+    /// 因此 <c>SetUpSavedMultiplayer</c> 直接 <c>State = liveState</c>，地图光标 / RNG / 事件效果原样保留，
+    /// 根治「菜单重连整局重建」因 serializableRun 丢失瞬态导致进入下一节点时同步屏障挂起、双端黑屏。
+    ///
+    /// 前置：本端无进行中 run（<c>DebugOnlyGetState() == null</c>）；lobby id 已校验为同一局。
+    /// 若中途失败（如 lobby 已失效），调用方应降级走 <see cref="EnterRunFromRejoin"/> 常规整局重建。
+    /// </summary>
+    public static async Task EnterRunFromLiveState(INetClientGameService netService, ClientRejoinResponseMessage rejoin, RunState liveState)
+    {
+        if (IsRejoining)
+            throw new InvalidOperationException("菜单重连已在进行中。");
+
+        if (liveState == null)
+            throw new InvalidOperationException("保留的活 run 为空。");
+        if (rejoin.serializableRun == null)
+            throw new InvalidOperationException("主机回传的 serializableRun 为空（无法构建 lobby）。");
+
+        // 与 EnterRunFromRejoin 一致：须在 SetUpSavedMultiplayer 之前读走主机 NumReloads 真值
+        // （SetUpSavedMultiplayer 内部 IncrementNumReloads 会原地 +1）。
+        int hostNumReloads = rejoin.serializableRun.NumReloads;
+
+        var game = NGame.Instance;
+        if (game == null)
+            throw new InvalidOperationException("NGame.Instance 为空，无法加载对局。");
+
+        IsRejoining = true;
+        NetUpdatePump? pump = null;
+        LoadRunLobby? lobby = null;
+
+        try
+        {
+            // 真空期保活泵机（与 EnterRunFromRejoin 完全一致）。
+            netService.SetBufferMessages(bufferMessages: true);
+            pump = NetUpdatePump.Attach(netService);
+
+            // lobby 用主机回传的 serializableRun 构建（提供 NetService / Players / NumReloads / MapDrawings）。
+            // 关键区别在下方 SetUpSavedMultiplayer 的 State 参数——活的 RunState 对象，而非 FromSerializable。
+            lobby = new LoadRunLobby(netService, PassiveRejoinLobbyListener.CreateListener(), rejoin.serializableRun);
+            foreach (var p in rejoin.serializableRun.Players)
+            {
+                lobby.Players.Add(new LoadRunLobbyPlayer
+                {
+                    id = p.NetId,
+                    versionInfo = PeerVersionInfo.LocalDefault(),
+                    isReady = true
+                });
+            }
+
+            Diag.Log($"[MenuRejoin] 零重建重锚对局：玩家 {rejoin.serializableRun.Players.Count} 人，" +
+                     $"第 {rejoin.serializableRun.CurrentActIndex + 1} 幕（活 run 复用，保真）。");
+
+            await game.Transition.FadeOut();
+
+            RejoinSceneReloadGuard.PrepareCurrentHandForSceneSwap();
+            using (RejoinTransitionGuard.SuppressTransitions())
+            using (RejoinSceneReloadGuard.SuppressLateHandLayoutRefresh())
+            using (RejoinSceneReloadGuard.PreserveStableTopBarLocation())
+            {
+                // 核心：直接把捕获的活 RunState 交给 SetUpSavedMultiplayer → State = liveState（零重建）。
+                await RunManager.Instance.SetUpSavedMultiplayer(liveState, lobby);
+
+                // 与 EnterRunFromRejoin 一致：把本地 _numReloads 拨回主机值，消除「重建一次就永久 +1」的漂移。
+                AlignNumReloadsWithHost(hostNumReloads);
+
+                // 临时禁用 CombatStateSynchronizer（与 EnterRunFromRejoin 一致），避免重连客机等待过期握手。
+                CombatStateSynchronizer? combatSync = null;
+                try
+                {
+                    combatSync = RunManager.Instance.CombatStateSynchronizer;
+                    if (combatSync != null)
+                    {
+                        combatSync.IsDisabled = true;
+                        Diag.Log("[MenuRejoin] 已临时禁用 CombatStateSynchronizer，避免重连客机等待过期握手。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Diag.Log($"[MenuRejoin] 禁用 CombatStateSynchronizer 失败：{ex.Message}");
+                }
+
+                try
+                {
+                    await game.LoadRun(liveState, rejoin.serializableRun.PreFinishedRoom);
+                }
+                finally
+                {
+                    try
+                    {
+                        if (combatSync != null)
+                        {
+                            combatSync.IsDisabled = false;
+                            Diag.Log("[MenuRejoin] 已恢复 CombatStateSynchronizer。");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Diag.Log($"[MenuRejoin] 恢复 CombatStateSynchronizer 失败：{ex.Message}");
+                    }
+                }
+            }
+
+            // disconnectSession: false —— 只注销 lobby 的消息处理器，连接本身留给已接管的 RunManager。
+            lobby.CleanUp(disconnectSession: false);
+            lobby = null;
+
+            // 关闭消息缓冲，积压消息交由 RunManager 处理（与 EnterRunFromRejoin 一致）。
+            try
+            {
+                netService.SetBufferMessages(bufferMessages: false);
+                Diag.Log("[MenuRejoin] 已关闭消息缓冲，积压消息交由 RunManager 处理。");
+            }
+            catch (Exception ex)
+            {
+                Diag.Log($"[MenuRejoin] 关闭消息缓冲失败（可能导致进局后不同步）：{ex.Message}");
+            }
+
+            pump?.Detach();
+            pump = null;
+
+            await game.Transition.FadeIn();
+
+            Diag.Log("[MenuRejoin] 零重建重锚成功，已进入对局（活 run 复用，保真）。");
+            PendingRejoinHostSteamId = 0;
+            HostInfoTracker.CaptureFromGame();
+        }
+        catch (Exception)
+        {
+            // 半途失败：清理残留状态，避免「State is already set.」；缓冲开关与泵机同样要还原。
+            try { netService.SetBufferMessages(bufferMessages: false); } catch { }
+            try { lobby?.CleanUp(disconnectSession: true, NetError.InternalError); } catch { }
+            try { pump?.Detach(); } catch { }
+            try
+            {
+                if (RunManager.Instance.DebugOnlyGetState() != null)
+                {
+                    RunManager.Instance.CleanUp(graceful: false);
+                    Diag.Log("[MenuRejoin] 已清理半途失败的 RunManager 状态。");
+                }
+            }
+            catch (Exception cleanupEx)
+            {
+                Diag.Log($"[MenuRejoin] 清理残留状态时出错：{cleanupEx.Message}");
+            }
+            throw;
+        }
+        finally
+        {
+            IsRejoining = false;
+        }
+    }
+
+    /// <summary>
     /// 菜单重连的「重试」入口：用上一次握手拿到的主机 Steam ID 重新发起一次完整握手，
     /// 并复用 <see cref="JoinFlowRejoinPatch.InterceptAsync"/> 的判定逻辑。
     ///

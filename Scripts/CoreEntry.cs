@@ -28,7 +28,7 @@ public class CoreEntry
 
         Diag.Init();
         Diag.Log("============================================");
-        Diag.Log("AutoReconnectMinCore v0.9.32-core (Reconnect Only) CoreEntry.Init() 开始");
+        Diag.Log("AutoReconnectMinCore v0.9.34-core (Reconnect Only) CoreEntry.Init() 开始");
         Diag.Log("============================================");
 
         // 向 JML ModRegistry 注册 Core——触发 AttributeRouter 扫描本程序集，
@@ -95,6 +95,6 @@ public class CoreEntry
         }
 
         Diag.Log($"自动重连：AutoReconnectEnabled={ReconnectService.AutoReconnectEnabled}");
-        Diag.Log("AutoReconnectMinCore v0.9.32-core (Reconnect Only) 初始化完成。");
+        Diag.Log("AutoReconnectMinCore v0.9.34-core (Reconnect Only) 初始化完成。");
     }
 }
