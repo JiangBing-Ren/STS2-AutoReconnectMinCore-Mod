@@ -22,7 +22,8 @@ _evidence/
 # ===== 部署产物（由 deploy.sh 从构建生成，不入库） =====
 deploy/**/*.dll
 
-# ===== 例外：本 mod 自身的发布 DLL 入库（最新 + 每版本归档，保留每一个版本） =====
+# ===== 例外：本 mod 自身的发布 DLL 入库（最新 + 每版本归档 + 项目根构建副本，保留每一个版本） =====
+!AutoReconnectMinCore.dll
 !deploy/AutoReconnectMinCore/AutoReconnectMinCore.dll
 !deploy/AutoReconnectMinCore/archive/**/AutoReconnectMinCore.dll
 
