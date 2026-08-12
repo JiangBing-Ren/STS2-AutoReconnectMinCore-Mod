@@ -1,0 +1,216 @@
+[18:16:15.398] Diag init OK
+[18:16:15.400] --------------------------------------------
+[18:16:15.400] AutoReconnectMinCore v0.9.32-core ModuleInitializer 触发
+[18:16:15.400] --------------------------------------------
+[18:16:15.402] ============================================
+[18:16:15.402] AutoReconnectMinCore v0.9.32-core (Reconnect Only) CoreEntry.Init() 开始
+[18:16:15.402] ============================================
+[18:16:15.723] [Core] 已向 JML ModRegistry 注册（attribute 扫描已触发）。
+[18:16:15.726] [Core] 已从本地 JSON 加载设置。
+[18:16:15.757] Core Harmony 挂载完成：成功 17 类 / 失败 0 类 / 共 17 个目标方法
+[18:16:15.758] 自动重连：AutoReconnectEnabled=True
+[18:16:15.758] AutoReconnectMinCore v0.9.32-core (Reconnect Only) 初始化完成。
+[18:16:21.730] [Core] 已向 RitsuLib 注册设置页（设置 -> Mods -> Auto Reconnect Min Core）。
+[18:34:01.909] CaptureLobbyId: 捕获 Steam 大厅 ID = 109775241853059536
+[18:34:23.365] Launch patch fired!
+[18:34:23.366] CaptureFromGame: Starting host info capture...
+[18:34:23.366] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:34:23.367] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:34:23.372] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:34:23.372]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:34:23.373]   PROP IsConnected (Boolean) = Boolean: True
+[18:34:23.373]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:34:23.373]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:34:23.374]   PROP IsGameLoading (Boolean) = Boolean: True
+[18:34:23.374]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:34:23.374]   PROP Type (NetGameType) = NetGameType: Client
+[18:34:23.374]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:34:23.374]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:34:23.375]   FIELD ConnectedToHost (Action) = null
+[18:34:23.375]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:34:23.375]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:34:23.376]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:34:23.376] --- END DUMP NetClientGameService ---
+[18:34:23.379] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:34:31.783] LocalPlayerDisconnected fired: WasInMultiplayer=True IsReconnecting=False SelfInitiated=False Reason=Quit
+[18:34:31.785] 正常结束/退出（Quit），放行原版流程，不弹重连。
+[18:34:37.811] CaptureLobbyId: 捕获 Steam 大厅 ID = 109775241853061695
+[18:34:41.023] SetUpSavedMultiplayer patch fired!
+[18:34:41.023] CaptureFromGame: Starting host info capture...
+[18:34:41.024] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:34:41.024] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:34:41.024] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:34:41.024]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:34:41.024]   PROP IsConnected (Boolean) = Boolean: True
+[18:34:41.025]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:34:41.025]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:34:41.025]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:34:41.026]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:34:41.026]   PROP Type (NetGameType) = NetGameType: Client
+[18:34:41.026]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:34:41.026]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:34:41.027]   FIELD ConnectedToHost (Action) = null
+[18:34:41.027]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:34:41.027]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:34:41.027]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:34:41.028] --- END DUMP NetClientGameService ---
+[18:34:41.028] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:34:42.356] Launch patch fired!
+[18:34:42.356] CaptureFromGame: Starting host info capture...
+[18:34:42.356] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:34:42.357] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:34:42.357] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:34:42.357]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:34:42.357]   PROP IsConnected (Boolean) = Boolean: True
+[18:34:42.357]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:34:42.357]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:34:42.358]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:34:42.358]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:34:42.358]   PROP Type (NetGameType) = NetGameType: Client
+[18:34:42.358]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:34:42.358]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:34:42.359]   FIELD ConnectedToHost (Action) = null
+[18:34:42.359]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:34:42.359]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:34:42.359]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:34:42.359] --- END DUMP NetClientGameService ---
+[18:34:42.359] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:35:01.320] LocalPlayerDisconnected fired: WasInMultiplayer=True IsReconnecting=False SelfInitiated=False Reason=Quit
+[18:35:01.320] 正常结束/退出（Quit），放行原版流程，不弹重连。
+[18:35:11.768] CaptureLobbyId: 捕获 Steam 大厅 ID = 109775241853063008
+[18:35:15.039] SetUpSavedMultiplayer patch fired!
+[18:35:15.039] CaptureFromGame: Starting host info capture...
+[18:35:15.040] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:35:15.040] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:35:15.040] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:35:15.040]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:35:15.040]   PROP IsConnected (Boolean) = Boolean: True
+[18:35:15.041]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:35:15.041]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:35:15.041]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:35:15.041]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:35:15.042]   PROP Type (NetGameType) = NetGameType: Client
+[18:35:15.042]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:35:15.042]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:35:15.043]   FIELD ConnectedToHost (Action) = null
+[18:35:15.043]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:35:15.043]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:35:15.043]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:35:15.043] --- END DUMP NetClientGameService ---
+[18:35:15.044] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:35:16.205] Launch patch fired!
+[18:35:16.205] CaptureFromGame: Starting host info capture...
+[18:35:16.205] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:35:16.206] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:35:16.206] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:35:16.206]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:35:16.206]   PROP IsConnected (Boolean) = Boolean: True
+[18:35:16.206]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:35:16.206]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:35:16.206]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:35:16.207]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:35:16.207]   PROP Type (NetGameType) = NetGameType: Client
+[18:35:16.207]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:35:16.207]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:35:16.207]   FIELD ConnectedToHost (Action) = null
+[18:35:16.207]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:35:16.207]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:35:16.208]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:35:16.208] --- END DUMP NetClientGameService ---
+[18:35:16.208] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:36:02.777] LocalPlayerDisconnected fired: WasInMultiplayer=True IsReconnecting=False SelfInitiated=False Reason=QuitGameOver
+[18:36:02.778] 正常结束/退出（QuitGameOver），放行原版流程，不弹重连。
+[18:36:13.468] CaptureLobbyId: 捕获 Steam 大厅 ID = 109775241853160130
+[18:36:22.953] Launch patch fired!
+[18:36:22.954] CaptureFromGame: Starting host info capture...
+[18:36:22.955] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:36:22.955] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:36:22.956] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:36:22.957]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:36:22.957]   PROP IsConnected (Boolean) = Boolean: True
+[18:36:22.958]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:36:22.958]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:36:22.959]   PROP IsGameLoading (Boolean) = Boolean: True
+[18:36:22.959]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:36:22.959]   PROP Type (NetGameType) = NetGameType: Client
+[18:36:22.960]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:36:22.960]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:36:22.960]   FIELD ConnectedToHost (Action) = null
+[18:36:22.961]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:36:22.962]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:36:22.962]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:36:22.963] --- END DUMP NetClientGameService ---
+[18:36:22.963] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:38:21.055] DisconnectSelfInitiated: User-initiated disconnect detected, suppressing reconnection
+[18:38:21.057] LocalPlayerDisconnected fired: WasInMultiplayer=True IsReconnecting=False SelfInitiated=True Reason=Quit
+[18:38:21.057] 正常结束/退出（Quit），放行原版流程，不弹重连。
+[18:38:38.756] CaptureLobbyId: 捕获 Steam 大厅 ID = 109775241853160130
+[18:38:40.185] [MenuRejoin] 开始重建对局：玩家 2 人，第 1 幕。
+[18:38:40.987] SetUpSavedMultiplayer patch fired!
+[18:38:40.987] CaptureFromGame: Starting host info capture...
+[18:38:40.987] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:38:40.988] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:38:40.988] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:38:40.988]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:38:40.988]   PROP IsConnected (Boolean) = Boolean: True
+[18:38:40.988]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:38:40.989]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:38:40.989]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:38:40.989]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:38:40.989]   PROP Type (NetGameType) = NetGameType: Client
+[18:38:40.990]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:38:40.990]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:38:40.991]   FIELD ConnectedToHost (Action) = null
+[18:38:40.991]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:38:40.991]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:38:40.991]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:38:40.992] --- END DUMP NetClientGameService ---
+[18:38:40.992] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:38:40.993] [MenuRejoin] NumReloads 已对齐主机：1 → 0（否则此后每次重连都会被误判成「主机状态已变」而重复整局重建）。
+[18:38:40.993] [MenuRejoin] 已临时禁用 CombatStateSynchronizer，避免重连客机等待过期握手。
+[18:38:42.282] Launch patch fired!
+[18:38:42.283] CaptureFromGame: Starting host info capture...
+[18:38:42.283] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:38:42.284] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:38:42.284] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:38:42.284]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:38:42.284]   PROP IsConnected (Boolean) = Boolean: True
+[18:38:42.285]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:38:42.285]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:38:42.285]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:38:42.285]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:38:42.285]   PROP Type (NetGameType) = NetGameType: Client
+[18:38:42.285]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:38:42.285]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:38:42.285]   FIELD ConnectedToHost (Action) = null
+[18:38:42.286]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:38:42.286]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:38:42.286]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:38:42.286] --- END DUMP NetClientGameService ---
+[18:38:42.286] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:38:42.522] [MenuRejoin] 注入已解析的“?”房间（避免重摇）：Event / EVENT.WOOD_CARVINGS
+[18:38:42.708] [MenuRejoin] 已恢复 CombatStateSynchronizer。
+[18:38:42.709] [MenuRejoin] 已关闭消息缓冲，积压消息交由 RunManager 处理。
+[18:38:43.393] [MenuRejoin] 重连成功，已进入对局。
+[18:38:43.393] CaptureFromGame: Starting host info capture...
+[18:38:43.394] CaptureFromGame: Found lobby, marked WasInMultiplayer=true
+[18:38:43.394] ExtractHostViaNetService: _netService type=MegaCrit.Sts2.Core.Multiplayer.NetClientGameService
+[18:38:43.394] --- DUMP NetClientGameService (MegaCrit.Sts2.Core.Multiplayer.NetClientGameService) ---
+[18:38:43.395]   PROP NetClient (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:38:43.395]   PROP IsConnected (Boolean) = Boolean: True
+[18:38:43.395]   PROP NetId (UInt64) = UInt64: 76561199812560543
+[18:38:43.395]   PROP HostNetId (UInt64) = UInt64: 76561199082020180
+[18:38:43.395]   PROP IsGameLoading (Boolean) = Boolean: False
+[18:38:43.396]   PROP Platform (PlatformType) = PlatformType: Steam
+[18:38:43.396]   PROP Type (NetGameType) = NetGameType: Client
+[18:38:43.396]   FIELD _messageBus (NetMessageBus) = NetMessageBus: MegaCrit.Sts2.Core.Multiplayer.NetMessageBus
+[18:38:43.396]   FIELD _qualityTracker (NetQualityTracker) = NetQualityTracker: MegaCrit.Sts2.Core.Multiplayer.Quality.NetQualityTracker
+[18:38:43.396]   FIELD ConnectedToHost (Action) = null
+[18:38:43.396]   FIELD Disconnected (Action`1) = Action`1: System.Action`1[MegaCrit.Sts2.Core.Entities.Multiplayer.NetErrorInfo]
+[18:38:43.397]   FIELD <NetClient>k__BackingField (NetClient) = SteamClient: MegaCrit.Sts2.Core.Multiplayer.Transport.Steam.SteamClient
+[18:38:43.397]   FIELD <Platform>k__BackingField (PlatformType) = PlatformType: Steam
+[18:38:43.397] --- END DUMP NetClientGameService ---
+[18:38:43.397] HostNetId found via _netService.HostNetId = 76561199082020180
+[18:38:43.399] [Diag] 客机重连成功：主菜单重连（用主机回传的存档重建对局），第 1/1 次。已恢复到第 1 幕，共 2 名玩家。
+[18:40:25.429] LocalPlayerDisconnected fired: WasInMultiplayer=True IsReconnecting=False SelfInitiated=False Reason=Quit
+[18:40:25.432] 正常结束/退出（Quit），放行原版流程，不弹重连。
