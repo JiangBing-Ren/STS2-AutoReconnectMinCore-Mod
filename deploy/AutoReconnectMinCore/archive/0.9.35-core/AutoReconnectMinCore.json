@@ -1,0 +1,12 @@
+{
+  "id": "AutoReconnectMinCore",
+  "name": "Auto Reconnect Min Core",
+  "author": "姜秉人",
+  "description": "【核心】断线自动重连——客机掉线后自动重连，可通过邀请重连。\n暂停菜单新增「邀请重连」按钮：房主可通过 Steam 邀请面板，把掉线队友重新拉回大厅。\n可独立安装。\n通过 RitsuLib 提供设置界面，通过 JmcModLib提供暂停菜单按钮。",
+  "version": "0.9.35-core",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [{"id": "STS2-RitsuLib"}, {"id": "JmcModLib"}],
+  "affects_gameplay": false,
+  "min_game_version": "0.111.0"
+}

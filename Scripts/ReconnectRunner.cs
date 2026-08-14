@@ -195,7 +195,7 @@ public partial class ReconnectRunner : Node
             // 标准流程（新建 NetService）：与 v0.9.28 完全一致
             // ───────────────────────────────────────────────────────────────────
             // 1. 新建 NetService（v0.1.8 复用已死实例是错的；但 v0.9.29 已改为“优先复用”，见上）
-            _netService = new NetClientGameService();
+            _netService = new NetClientGameService(PeerVersionInfo.LocalDefault());
             _connectCompletion = new TaskCompletionSource<InitialGameInfoMessage>();
             _rejoinCompletion = new TaskCompletionSource<ClientRejoinResponseMessage>();
             _disconnectCompletion = new TaskCompletionSource<NetErrorInfo>();
@@ -251,11 +251,10 @@ public partial class ReconnectRunner : Node
             }
 
             // 5. 发 ClientRejoinRequestMessage，等 ClientRejoinResponseMessage
-            //    必须用 PeerVersionInfo.LocalDefault() 填充 versionInfo，否则 version=null
-            //    会在序列化 WriteString(null) 时抛 ArgumentNullException（v0.6.1 崩溃真凶）。
+            //    （v0.111.0 起 ClientRejoinRequestMessage 不再含 versionInfo 字段，版本由游戏内部填充）
             stage = ReconnectStage.Handshaking;
             Diag.Log("PerformReconnect: sending ClientRejoinRequestMessage...");
-            _netService.SendMessage(new ClientRejoinRequestMessage { versionInfo = PeerVersionInfo.LocalDefault() });
+            _netService.SendMessage(new ClientRejoinRequestMessage());
 
             var rejoin = await AwaitWithTimeoutAndDisconnect(
                 _rejoinCompletion.Task, "ClientRejoinResponseMessage");
@@ -409,7 +408,7 @@ public partial class ReconnectRunner : Node
             // 发 ClientRejoinRequestMessage，等响应
             stage = ReconnectStage.Handshaking;
             Diag.Log("PerformReuseReconnect: 发送 ClientRejoinRequestMessage...");
-            oldSvc.SendMessage(new ClientRejoinRequestMessage { versionInfo = PeerVersionInfo.LocalDefault() });
+            oldSvc.SendMessage(new ClientRejoinRequestMessage());
 
             var rejoin = await AwaitWithTimeoutAndDisconnect(_rejoinCompletion.Task, "ClientRejoinResponseMessage");
             if (rejoin == null)

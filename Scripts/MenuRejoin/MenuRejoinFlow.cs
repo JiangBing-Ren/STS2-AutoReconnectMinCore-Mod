@@ -259,7 +259,6 @@ public static class MenuRejoinFlow
                 lobby.Players.Add(new LoadRunLobbyPlayer
                 {
                     id = p.NetId,
-                    versionInfo = PeerVersionInfo.LocalDefault(),
                     isReady = true
                 });
             }
@@ -425,7 +424,6 @@ public static class MenuRejoinFlow
                 lobby.Players.Add(new LoadRunLobbyPlayer
                 {
                     id = p.NetId,
-                    versionInfo = PeerVersionInfo.LocalDefault(),
                     isReady = true
                 });
             }
@@ -573,7 +571,7 @@ public static class MenuRejoinFlow
         try
         {
             Diag.Log($"[MenuRejoin] 发起菜单重连重试，连接方式 = {connLabel}");
-            var flow = new JoinFlow(new NetClientGameService());
+            var flow = new JoinFlow(new NetClientGameService(PeerVersionInfo.LocalDefault()));
             var inner = flow.Begin(initializer, Engine.GetMainLoop() as SceneTree);
             // InterceptAsync 会：识别 rejoin →（非战斗）重建对局 /（战斗中）再次提示，
             // 并维持 LastAttemptWasRejoin / PendingRejoinHostSteamId 语义。

@@ -61,6 +61,9 @@ public abstract class SuppressedNetGameServiceBase : INetGameService
     public NetGameType Type => Inner.Type;
     public PlatformType Platform => Inner.Platform;
 
+    /// <summary>v0.111.0 起 INetGameService 新增的只读属性；直接透传给 Inner（包装器不改变版本信息）。</summary>
+    public MegaCrit.Sts2.Core.Multiplayer.PeerVersionInfo LocalVersion => Inner.LocalVersion;
+
     public event Action<NetErrorInfo>? Disconnected
     {
         add => Inner.Disconnected += value;
@@ -117,8 +120,6 @@ public sealed class SuppressedNetHostGameService : SuppressedNetGameServiceBase,
         _innerHost = inner;
     }
 
-    public IReadOnlyList<NetClientData> ConnectedPeers => _innerHost.ConnectedPeers;
-
     public NetHost? NetHost => _innerHost.NetHost;
 
     public event Action<ulong>? ClientConnected
@@ -133,6 +134,13 @@ public sealed class SuppressedNetHostGameService : SuppressedNetGameServiceBase,
         remove => _innerHost.ClientDisconnected -= value;
     }
 
+    /// <summary>v0.111.0 起 INetHostGameService 新增：某客机连接失败的事件，透传给 Inner。</summary>
+    public event Action<ulong, NetErrorInfo>? ClientConnectionFailed
+    {
+        add => _innerHost.ClientConnectionFailed += value;
+        remove => _innerHost.ClientConnectionFailed -= value;
+    }
+
     /// <summary>
     /// 单独踢某个客机是**允许**的——被抑制的只有「拆掉整个会话」的 <c>Disconnect</c>。
     /// 回退流程本来就需要把仍在线的客机踢下去让它们重连回同一大厅。
@@ -142,6 +150,10 @@ public sealed class SuppressedNetHostGameService : SuppressedNetGameServiceBase,
 
     public void SetPeerReadyForBroadcasting(ulong peerId)
         => _innerHost.SetPeerReadyForBroadcasting(peerId);
+
+    /// <summary>v0.111.0 起 INetHostGameService 新增：取某客机的版本信息，透传给 Inner。</summary>
+    public MegaCrit.Sts2.Core.Multiplayer.PeerVersionInfo? GetVersionInfoForPeer(ulong peerId)
+        => _innerHost.GetVersionInfoForPeer(peerId);
 }
 
 /// <summary>包装器工厂 + RunManager.NetService 反射读写。</summary>
