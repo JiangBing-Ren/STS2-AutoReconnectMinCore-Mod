@@ -5,12 +5,14 @@
 #   1) 每次改动都必须先升级 mod_manifest.json 的 version（唯一事实来源）。
 #   2) 旧版本不覆盖：每个版本归档到 deploy/AutoReconnectMinCore/archive/<version>/，
 #      若目标版本归档已存在则报错退出，强制你先升版本。
+#   3) 2026-10-22 起（用户指令）：不再部署到游戏本地 mods 目录——分发统一走
+#      Steam 创意工坊（公开订阅，Steam 自动更新到本地）。本脚本只负责
+#      构建 + 仓库内分发目录(latest) + 归档。
 #
 # 用法：bash deploy_core.sh
 set -euo pipefail
 
 PROJ="$PWD"
-GAME="/d/Steam/steamapps/common/Slay the Spire 2/mods/AutoReconnectMinCore"
 DOTNET="/c/Program Files/dotnet/dotnet"
 STS2_GAME_DIR="D:/Steam/steamapps/common/Slay the Spire 2"
 DEP="$PROJ/deploy/AutoReconnectMinCore"
@@ -51,19 +53,15 @@ if [ -d "$ARCH" ]; then
   exit 1
 fi
 
-# 4) 部署到游戏加载目录（latest，覆盖是预期的）
-mkdir -p "$GAME"
-robust_cp "$PROJ/AutoReconnectMinCore.dll" "$GAME/AutoReconnectMinCore.dll"
-robust_cp "$PROJ/mod_manifest.json" "$GAME/AutoReconnectMinCore.json"
-
-# 5) 部署到分发目录（latest）
+# 4) 部署到仓库内分发目录（latest）
 mkdir -p "$DEP"
 robust_cp "$PROJ/AutoReconnectMinCore.dll" "$DEP/AutoReconnectMinCore.dll"
 robust_cp "$PROJ/mod_manifest.json" "$DEP/AutoReconnectMinCore.json"
 
-# 6) 归档该版本（永不覆盖）
+# 5) 归档该版本（永不覆盖）
 mkdir -p "$ARCH"
 robust_cp "$PROJ/AutoReconnectMinCore.dll" "$ARCH/AutoReconnectMinCore.dll"
 robust_cp "$PROJ/mod_manifest.json" "$ARCH/AutoReconnectMinCore.json"
 
-echo "==> Core 完成：游戏目录 + 分发目录(latest) + 归档 $ARCH"
+echo "==> Core 完成：分发目录(latest) + 归档 $ARCH"
+echo "    （不再部署到游戏本地 mods 目录；发布请走 ModUploader → 创意工坊）"

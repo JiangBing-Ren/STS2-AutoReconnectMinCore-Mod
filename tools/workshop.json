@@ -1,7 +1,7 @@
 {
   "title": "断线重连 | AutoReconnectMinCore",
   "description": "【核心】断线自动重连——客机掉线后自动重连，可通过邀请重连。\n暂停菜单新增「邀请重连」按钮：房主可通过 Steam 邀请面板，把掉线队友重新拉回大厅。\n可独立安装。\n通过 RitsuLib 提供设置界面，通过 JmcModLib提供暂停菜单按钮。",
-  "visibility": "private",
-  "changeNote": "v0.9.36-core：适配游戏 v0.111.0 网络层 API 变更，修复旧构建在新版本上的加载崩溃；客机掉线自动重连、暂停菜单「邀请重连」按钮功能不变。依赖 STS2-RitsuLib 与 JmcModLib。",
+  "visibility": "public",
+  "changeNote": "v0.9.37-core：重连体验改进——①重连流程进行中自动抑制原版错误弹窗（静默重连，不再被 vanilla 弹窗打断）；②重连成功后先等待对局状态就绪（主菜单→对局节点→RunManager→战斗/手牌）再收起浮层，回执更准确。依赖 STS2-RitsuLib 与 JmcModLib。",
   "dependencies": [3747602295, 3747526103]
 }
