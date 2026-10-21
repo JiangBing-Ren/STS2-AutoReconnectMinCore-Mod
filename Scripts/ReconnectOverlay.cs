@@ -103,6 +103,17 @@ public partial class ReconnectOverlay : Control
             _attemptLabel.Text = $"第 {attempt}/{maxAttempts} 次尝试";
     }
 
+    /// <summary>
+    /// v0.9.37 —— 直接覆盖主/副状态文本（就绪门闩等阶段用）。
+    /// </summary>
+    public void SetStatus(string status, string sub)
+    {
+        if (_statusLabel != null)
+            _statusLabel.Text = status;
+        if (_attemptLabel != null)
+            _attemptLabel.Text = sub;
+    }
+
     public void ShowManualButton()
     {
         if (_statusLabel != null)

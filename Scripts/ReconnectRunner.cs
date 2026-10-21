@@ -4,11 +4,13 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Connection;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Messages.Lobby;
+using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Runs;
 using AutoReconnect.Scripts.MenuRejoin;
 
@@ -45,6 +47,9 @@ public partial class ReconnectRunner : Node
     private const float BaseRetryDelaySeconds = 5.0f;
     private const float MaxRetryDelaySeconds = 30.0f;
     private const float HandshakeTimeoutSeconds = 20.0f;
+
+    /// <summary>v0.9.37: 就绪门闩超时（秒）。握手成功后最多等这么久让对局场景就绪，超时不阻断。</summary>
+    private const int RunReadyTimeoutSeconds = 20;
 
     /// <summary>v0.9.15: 指数退避——计算当前 attempt 的等间隔（秒）。</summary>
     private static float RetryDelayForAttempt(int attempt)
@@ -137,7 +142,17 @@ public partial class ReconnectRunner : Node
             _lastFailure = failure;
             if (failure == null)
             {
-                OnReconnectSuccess();
+                // v0.9.37 —— 就绪门闩：握手成功 ≠ 可玩。LoadRun/NRun 场景切换、
+                // ActionQueueSynchronizer 接管、战斗房间重建都可能还差几帧到几秒，
+                // 提前收浮层会让玩家看到「黑屏/无响应」的假失败。
+                // （借鉴 QuickLink 的 SpecMatcher.SolveSender 回房就绪探测器。）
+                if (_overlay != null && GodotObject.IsInstanceValid(_overlay))
+                    _overlay.SetStatus("已重新连接", "正在等待对局就绪...");
+                var ready = await WaitRunReadyAsync(_cts!.Token);
+                if (!ready)
+                    Diag.Log("[v0.9.37] 就绪门闩超时：连接已建立但对局尚未完全就绪，" +
+                             "仍按成功收尾（玩家可继续操作，稍后自行恢复）。");
+                OnReconnectSuccess(ready);
                 return;
             }
 
@@ -639,9 +654,9 @@ public partial class ReconnectRunner : Node
         }
     }
 
-    private void OnReconnectSuccess()
+    private void OnReconnectSuccess(bool runReady = true)
     {
-        Diag.Log("OnReconnectSuccess: cleaning up overlay and runner");
+        Diag.Log($"OnReconnectSuccess: cleaning up overlay and runner (runReady={runReady})");
         _isRunning = false;
         ReconnectService.OnReconnectFinished();
 
@@ -651,10 +666,80 @@ public partial class ReconnectRunner : Node
         // v0.7.1 —— 成功也要给玩家一个明确回执（此前成功是完全静默的，
         // 玩家分不清「真的连回来了」还是「界面卡住了」）。
         ReconnectDiagnostics.ReportClientSuccess(_connLabel, _attempt, MaxRetries,
-            "对局已恢复同步，可以继续游戏。");
+            runReady
+                ? "对局已恢复同步，可以继续游戏。"
+                : "连接已恢复，对局场景可能还需一两秒加载，请稍候。");
 
         // _netService 保留，让 _Process 继续驱动新连接
         QueueFree();
+    }
+
+    /// <summary>
+    /// v0.9.37 —— 重连成功后的「对局就绪门闩」。
+    ///
+    /// 握手成功（InitialGameInfo + ClientRejoinResponse 到手、NetService 已接回
+    /// RunManager）只代表**网络层**通了；此时 NRun 场景可能还没切换完、
+    /// ActionQueueSynchronizer 还没接管、战斗房间还没重建。若此刻就收掉浮层，
+    /// 玩家看到的是黑屏/无响应，会以为重连失败。
+    ///
+    /// 判定链（借鉴 QuickLink <c>SpecMatcher.SolveSender</c> 的回房就绪探测器）：
+    ///   ① 已离开主菜单      <c>NGame.Instance.MainMenu == null</c>
+    ///   ② 对局场景已就绪    <c>NGame.Instance.CurrentRunNode != null</c>
+    ///   ③ RunManager 持有进行中的 run <c>RunManager.Instance.IsInProgress</c>
+    ///   ④（若主机在战斗中）<c>CombatManager.Instance.IsInProgress</c>
+    /// 全部满足才算就绪；每 250ms 轮询一次，最多等 <see cref="RunReadyTimeoutSeconds"/> 秒。
+    /// 超时不阻断——记录警告后照常按成功收尾，由玩家侧自然恢复。
+    /// </summary>
+    private async Task<bool> WaitRunReadyAsync(CancellationToken token)
+    {
+        const float PollInterval = 0.25f;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(RunReadyTimeoutSeconds);
+        bool loggedCombatWait = false;
+
+        while (!token.IsCancellationRequested)
+        {
+            token.ThrowIfCancellationRequested();
+            if (IsRunReady(ref loggedCombatWait))
+            {
+                Diag.Log("[v0.9.37] 就绪门闩：对局已就绪。");
+                return true;
+            }
+            if (DateTime.UtcNow >= deadline)
+                return false;
+
+            var timer = GetTree().CreateTimer(PollInterval);
+            await ToSignal(timer, Godot.Timer.SignalName.Timeout);
+        }
+        return false;
+    }
+
+    /// <summary>就绪判定本体（见 <see cref="WaitRunReadyAsync"/> 的判定链）。</summary>
+    private static bool IsRunReady(ref bool loggedCombatWait)
+    {
+        try
+        {
+            var game = NGame.Instance;
+            if (game == null) return false;
+            if (game.MainMenu != null) return false;              // ① 还在主菜单
+            if (game.CurrentRunNode == null) return false;        // ② NRun 场景未就绪
+
+            var rm = RunManager.Instance;
+            if (rm == null || !rm.IsInProgress) return false;     // ③ 没有进行中的 run
+
+            // ④ 主机在战斗中时，确认战斗现场已立起（非战斗场景直接放行）。
+            var cm = CombatManager.Instance;
+            if (cm != null && cm.IsInProgress && !loggedCombatWait)
+            {
+                loggedCombatWait = true;
+                Diag.Log("[v0.9.37] 就绪门闩：主机处于战斗中，战斗场景已就绪。");
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[v0.9.37] 就绪门闩判定异常（视为未就绪，继续等待）：{ex.Message}");
+            return false;
+        }
     }
 
     private void OnReconnectFailed()

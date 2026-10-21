@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <Compile Remove="tmp\**" />
+    <!-- tools/ 是独立项目（sts2sig 等），其全局命名空间类型（如 Engine）会经默认 **/*.cs
+         glob 混入本程序集并在简单名查找中击败 using Godot 的 Godot.Engine（CS0117），必须排除 -->
+    <Compile Remove="tools\**" />
     <Reference Include="sts2">
       <HintPath>$(Sts2DataDir)\sts2.dll</HintPath>
       <Private>false</Private>
