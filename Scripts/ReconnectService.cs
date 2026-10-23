@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Connection;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
+using AutoReconnect.Scripts.Net;
 
 namespace AutoReconnect.Scripts;
 
@@ -51,6 +52,11 @@ public static class ReconnectService
                 {
                     var setter = ReflectionHelper.GetOrCreateCompiledSetter(type, memberName, flags);
                     setter(rm, netService);
+
+                    // 连接实例换了 —— 旧 NetService 上挂的 mod 消息 handler 随之全部失效
+                    //（handler 是按实例存的）。作废注册记录，让下一次 EnsureRegistered 重新挂。
+                    NetMessageRegistry.Invalidate();
+
                     Diag.Log($"AssignNetService: set via compiled setter ({memberName})");
                     return true;
                 }

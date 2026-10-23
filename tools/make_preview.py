@@ -135,10 +135,23 @@ def text_block(img):
     # 英文名
     en_font = ImageFont.truetype(FONT_BD, 34)
     d.text((x, 308), "AutoReconnectMinCore", font=en_font, fill=GOLD_HI)
-    # 功能说明
-    desc_font = ImageFont.truetype(FONT_RG, 27)
-    d.text((x, 372), "客机掉线自动重连 · 暂停菜单「邀请重连」按钮", font=desc_font, fill=MUTED)
-    d.text((x, 412), "适配游戏 v0.111.0  ·  需 RitsuLib / JmcModLib", font=desc_font, fill=MUTED)
+    # 功能说明（自适应字号：两行都不得超出画布右缘，否则逐级缩小）
+    desc_lines = [
+        "客机掉线自动重连 · 暂停菜单「邀请重连」按钮",
+        "适配游戏 v0.111.0  ·  需 RitsuLib / JmcModLib",
+    ]
+    max_w = W - x - 36  # 右侧留 36px 边距
+    size = 27
+    while size > 16:
+        f = ImageFont.truetype(FONT_RG, size)
+        if all(d.textlength(t, font=f) <= max_w for t in desc_lines):
+            desc_font = f
+            break
+        size -= 1
+    else:
+        desc_font = ImageFont.truetype(FONT_RG, 16)
+    d.text((x, 372), desc_lines[0], font=desc_font, fill=MUTED)
+    d.text((x, 412), desc_lines[1], font=desc_font, fill=MUTED)
 
 
 def main():

@@ -183,6 +183,7 @@ public static class NetServiceSwapper
             if (prop != null && prop.CanWrite)
             {
                 prop.SetValue(rm, service);
+                NetMessageRegistry.Invalidate();
                 return true;
             }
 
@@ -192,6 +193,7 @@ public static class NetServiceSwapper
             if (backing != null)
             {
                 backing.SetValue(rm, service);
+                NetMessageRegistry.Invalidate();
                 return true;
             }
 
@@ -234,6 +236,10 @@ public static class NetServiceSwapper
         {
             // 必须还原：RunLobby 等处存在到具体类 NetHostGameService 的强转，包装器不能久留。
             Set(rm, original);
+
+            // 还原后立刻把 mod 的消息 handler 补回真连接——Set 已作废旧的绑定记录，
+            // 不补的话接下来这段时间内的多人消息会全部无人处理。
+            NetMessageRegistry.EnsureRegistered();
         }
 
         Diag.Log($"[Net] CleanUp 完成且连接保活（拦截 Disconnect {wrapper.SuppressedDisconnectCount} 次）。");

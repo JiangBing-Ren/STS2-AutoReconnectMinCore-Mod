@@ -64,6 +64,7 @@ static class Program
                 "find" => engine.Find(rest),
                 "member" => engine.Member(rest),
                 "ilspy" => engine.IlspyHint(rest),
+                "netmsg" => NetMsgScanner.Run(dll, rest),
                 _ => Fail($"未知命令 '{cmd}'。" + Help)
             };
         }
@@ -86,10 +87,12 @@ sts2sig <dll?> <命令> [参数...]
   find   <kw...>            类型名子串匹配 → 每命中类型的完整成员签名
   member <kw...>            成员名子串匹配（跨所有类型）
   ilspy  <TypeFullName>     打印 ilspycmd 反编译命令模板（需要方法体时用）
+  netmsg <mod.dll...>       复刻游戏的消息 ID 分配，实证多个 mod 的 INetMessage 是否撞车
 示例:
   sts2sig find LoadRunLobby
   sts2sig member Rejoin
   sts2sig index -o sts2_types.txt
+  sts2sig netmsg AutoReconnectMinCore.dll MpLib.dll
 """;
 }
 

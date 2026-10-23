@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Messages.Lobby;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Runs;
 using AutoReconnect.Scripts.MenuRejoin;
+using AutoReconnect.Scripts.Net;
 
 namespace AutoReconnect.Scripts;
 
@@ -329,6 +330,9 @@ public partial class ReconnectRunner : Node
                 CleanupNetService();
                 return new ReconnectFailure(stage, "无法把新连接接回 RunManager（反射未找到可写的 NetService 成员）");
             }
+            // 新连接实例上没有任何 mod 的 handler —— 立刻补挂。
+            // 漏掉这一步的话，接下来收到的自定义消息会全部「无人处理」而被丢弃。
+            NetMessageRegistry.EnsureRegistered();
             Diag.Log("PerformReconnect: NetService assigned to RunManager, reconnect SUCCESS");
 
             // 保留 _netService（不 cleanup），让 _Process 继续驱动它

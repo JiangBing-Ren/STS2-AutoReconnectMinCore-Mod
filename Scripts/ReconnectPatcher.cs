@@ -3,6 +3,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Runs;
+using AutoReconnect.Scripts.Net;
 
 namespace AutoReconnect.Scripts;
 
@@ -22,6 +23,10 @@ internal static class SetUpSavedMultiplayerPatch
         if (ClientRunPreserver.PreservedRun != null && !ReferenceEquals(ClientRunPreserver.PreservedRun, state))
             ClientRunPreserver.Clear();
         HostInfoTracker.CaptureFromGame();
+
+        // 对局（重新）装载完成后 RunManager.NetService 已是新的实例，
+        // 而消息 handler 是按实例挂的 —— 这里统一补挂一次。幂等：实例没变就什么都不做。
+        NetMessageRegistry.EnsureRegistered();
     }
 }
 

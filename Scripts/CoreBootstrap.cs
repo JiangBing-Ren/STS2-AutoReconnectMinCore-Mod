@@ -15,7 +15,7 @@ internal static class CoreBootstrap
     {
         Diag.Init();
         Diag.Log("--------------------------------------------");
-        Diag.Log("AutoReconnectMinCore v0.9.37-core ModuleInitializer 触发");
+        Diag.Log("AutoReconnectMinCore v0.9.39-core ModuleInitializer 触发");
         Diag.Log("--------------------------------------------");
 
         HostInfoTracker.Reset();

@@ -28,7 +28,7 @@ public class CoreEntry
 
         Diag.Init();
         Diag.Log("============================================");
-        Diag.Log("AutoReconnectMinCore v0.9.37-core (Reconnect Only) CoreEntry.Init() 开始");
+        Diag.Log("AutoReconnectMinCore v0.9.39-core (Reconnect Only) CoreEntry.Init() 开始");
         Diag.Log("============================================");
 
         // 向 JML ModRegistry 注册 Core——触发 AttributeRouter 扫描本程序集，
@@ -45,6 +45,19 @@ public class CoreEntry
         }
 
         HostInfoTracker.Reset();
+
+        // [v0.9.38] 战斗中掉线 → 回退到本回合开头：安装回合快照抓取 + 主机端触发点。
+        // [v0.9.39] 补上多人消息通道：按 NetService 实例去重的注册器（NetMessageRegistry）
+        //   + 回滚完成后向在线端广播结果。换连接会丢 handler，是 rewind 消息「写了却收不到」的根因。
+        //   （思路借鉴 MpLib 的 NetBootstrap，自研实现，不引入依赖。）
+        try
+        {
+            AutoReconnect.Scripts.Combat.CombatTurnRewind.Install();
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[Core] 回合回滚安装失败（已忽略）：{ex.GetType().Name}: {ex.Message}");
+        }
 
         // 向 RitsuLib 注册 Core 设置界面（含持久化加载）
         try
@@ -95,6 +108,6 @@ public class CoreEntry
         }
 
         Diag.Log($"自动重连：AutoReconnectEnabled={ReconnectService.AutoReconnectEnabled}");
-        Diag.Log("AutoReconnectMinCore v0.9.37-core (Reconnect Only) 初始化完成。");
+        Diag.Log("AutoReconnectMinCore v0.9.39-core (Reconnect Only) 初始化完成。");
     }
 }
